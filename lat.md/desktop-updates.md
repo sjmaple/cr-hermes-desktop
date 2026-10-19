@@ -74,7 +74,13 @@ Closing About releases an active update listener immediately. A later subprocess
 
 ### Reopened pane rejects another update job
 
-Closing and reopening About gives a new update its own request ID. A still-running earlier job cannot populate the reopened pane's phase or affect its result.
+Reopening About settles its initial React/config commit before admitting a new update with a distinct real request ID. Old phases and results cannot replace the new job or release its listener.
+
+The fixture awaits actual IPC admissions and listener registration instead of fabricating fallback IDs. An enabled version-cache button alone does not establish that React has committed its initial target-lifetime effect.
+
+### Initial metadata preserves an admitted update
+
+Deferred metadata from the current initial load preserves a cached-ready update and its listener. A later connection-config notification still revokes the old phase and result by starting a new config epoch.
 
 ### IPC echoes the update owner
 

@@ -328,20 +328,34 @@ it("releases a pending Agent update listener immediately on unmount", async () =
 
 // @lat: [[desktop-updates#Agent phases#Reopened pane rejects another update job]]
 it("does not borrow old update phases after About is reopened for a new update", async () => {
-  const first = render(<Harness />);
+  let first!: ReturnType<typeof render>;
+  // Settle the initial target's passive effects before admitting either job.
+  await act(async () => {
+    first = render(<Harness />);
+  });
   await ready();
   fireEvent.click(screen.getByRole("button", { name: "Update Engine" }));
-  const firstId =
-    vi.mocked(window.hermesAPI.runHermesUpdate).mock.calls[0]?.[0] ||
-    "first-job";
+  await waitFor(() => {
+    expect(window.hermesAPI.runHermesUpdate).toHaveBeenCalledTimes(1);
+    expect(window.hermesAPI.onInstallProgress).toHaveBeenCalledTimes(1);
+  });
+  const firstId = vi.mocked(window.hermesAPI.runHermesUpdate).mock.calls[0][0];
+  expect(firstId).toMatch(/^[\da-f-]{36}$/);
   const finishFirst = resolveAgent;
   first.unmount();
-  render(<Harness profile="other" />);
+  await act(async () => {
+    render(<Harness profile="other" />);
+  });
   await ready();
   fireEvent.click(screen.getByRole("button", { name: "Update Engine" }));
-  const secondId =
-    vi.mocked(window.hermesAPI.runHermesUpdate).mock.calls[1]?.[0] ||
-    "second-job";
+  await waitFor(() => {
+    expect(window.hermesAPI.runHermesUpdate).toHaveBeenCalledTimes(2);
+    expect(window.hermesAPI.onInstallProgress).toHaveBeenCalledTimes(2);
+  });
+  const secondId = vi.mocked(window.hermesAPI.runHermesUpdate).mock.calls[1][0];
+  expect(secondId).toMatch(/^[\da-f-]{36}$/);
+  expect(secondId).not.toBe(firstId);
+  expect(removeAgent).toHaveBeenCalledTimes(1);
   const finishSecond = resolveAgent;
   act(() =>
     emitAgent({
@@ -369,6 +383,68 @@ it("does not borrow old update phases after About is reopened for a new update",
   expect(screen.getByText("Current update job")).toBeInTheDocument();
   await act(async () => {
     finishFirst({ success: true });
+  });
+  expect(screen.getByText("Current update job")).toBeInTheDocument();
+  expect(removeAgent).toHaveBeenCalledTimes(1);
+  await act(async () => {
     finishSecond({ success: true });
   });
+  expect(removeAgent).toHaveBeenCalledTimes(2);
+});
+
+// @lat: [[desktop-updates#Agent phases#Initial metadata preserves an admitted update]]
+it("keeps a cached-ready job while same-config metadata settles but revokes it on a new config epoch", async () => {
+  localStorage.setItem(
+    "hermes-version-cache:local:work",
+    "Hermes Agent v1.0.0 Update available: v1.1.0",
+  );
+  let finishHome!: (home: string) => void;
+  vi.mocked(window.hermesAPI.getHermesHome).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        finishHome = resolve;
+      }),
+  );
+  await act(async () => {
+    render(<Harness />);
+  });
+  await ready();
+  expect(window.hermesAPI.getHermesHome).toHaveBeenCalledTimes(1);
+  expect(screen.queryByText("/isolated/test-home")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Update Engine" }));
+  await waitFor(() =>
+    expect(window.hermesAPI.runHermesUpdate).toHaveBeenCalledTimes(1),
+  );
+  const requestId = vi.mocked(window.hermesAPI.runHermesUpdate).mock
+    .calls[0][0];
+  expect(requestId).toMatch(/^[\da-f-]{36}$/);
+  const finishUpdate = resolveAgent;
+  const phase = {
+    operation: "update" as const,
+    requestId,
+    step: 0,
+    totalSteps: 0,
+    title: "Admitted cached update",
+    detail: "current job",
+    log: "current",
+  };
+  act(() => emitAgent(phase));
+  expect(screen.getByText("Admitted cached update")).toBeInTheDocument();
+  await act(async () => {
+    finishHome("/isolated/test-home");
+  });
+  expect(screen.getByText("/isolated/test-home")).toBeInTheDocument();
+  expect(screen.getByText("Admitted cached update")).toBeInTheDocument();
+  expect(removeAgent).not.toHaveBeenCalled();
+  act(() => listeners.config?.());
+  expect(screen.queryByText("Admitted cached update")).not.toBeInTheDocument();
+  expect(removeAgent).toHaveBeenCalledOnce();
+  await act(async () => {
+    emitAgent(phase);
+    finishUpdate({ success: true });
+  });
+  expect(screen.queryByText("Admitted cached update")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("Hermes updated successfully."),
+  ).not.toBeInTheDocument();
 });
