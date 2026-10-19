@@ -69,6 +69,7 @@ export default {
     error: "Couldn't send the approval response. Try again.",
   },
   thinking: "Thinking…",
+  jumpToLatest: "Jump to latest",
   showEarlierMessages: "Show {{count}} earlier messages",
   thought: "Thought",
   toolCall: "Tool call",

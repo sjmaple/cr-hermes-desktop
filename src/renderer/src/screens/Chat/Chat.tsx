@@ -463,7 +463,17 @@ function Chat({
     };
   }, [connectionId, setConnectionAuthority]);
 
-  const { containerRef, bottomRef } = useChatScroll(messages);
+  const { containerRef, contentRef, bottomRef, isFollowing, jumpToLatest } =
+    useChatScroll(
+      messages,
+      JSON.stringify([
+        runId,
+        connectionId,
+        profile,
+        hermesSessionId,
+        connectionRevision,
+      ]),
+    );
   const modelConfig = useModelConfig(profile);
   const { reload: reloadModelConfig, selectModel } = modelConfig;
   const chatCurrentModel =
@@ -1331,30 +1341,39 @@ function Chat({
       <ConfigHealthBanner profile={profile} onOpenDiagnose={onOpenDiagnose} />
 
       <div className="chat-body">
-        <div className="chat-messages" ref={containerRef}>
-          {messages.length === 0 ? (
-            <ChatEmptyState
-              onSelectSuggestion={handleSuggestion}
-              agent={agentAvatar}
-            />
-          ) : (
-            <MessageList
-              messages={messages}
-              isLoading={isLoading}
-              toolProgress={toolProgress}
-              onApprove={actions.handleApprove}
-              onDeny={actions.handleDeny}
-              onClarifyResolved={handleClarifyResolved}
-              onClarifyRespond={handleClarifyRespond}
-              onApprovalRespond={handleApprovalRespond}
-              onApprovalResolved={handleApprovalResolved}
-              agentAvatar={agentAvatar}
-              profile={profile}
-              connectionId={connectionId}
-              speechEnabled={active && connectionMode === "local"}
-            />
+        <div className="chat-transcript-pane">
+          <div className="chat-messages" ref={containerRef}>
+            <div className="chat-transcript" ref={contentRef}>
+              {messages.length === 0 ? (
+                <ChatEmptyState
+                  onSelectSuggestion={handleSuggestion}
+                  agent={agentAvatar}
+                />
+              ) : (
+                <MessageList
+                  messages={messages}
+                  isLoading={isLoading}
+                  toolProgress={toolProgress}
+                  onApprove={actions.handleApprove}
+                  onDeny={actions.handleDeny}
+                  onClarifyResolved={handleClarifyResolved}
+                  onClarifyRespond={handleClarifyRespond}
+                  onApprovalRespond={handleApprovalRespond}
+                  onApprovalResolved={handleApprovalResolved}
+                  agentAvatar={agentAvatar}
+                  profile={profile}
+                  connectionId={connectionId}
+                  speechEnabled={active && connectionMode === "local"}
+                />
+              )}
+              <div ref={bottomRef} />
+            </div>
+          </div>
+          {!isFollowing && messages.length > 0 && (
+            <button className="chat-jump-latest" onClick={jumpToLatest}>
+              {t("chat.jumpToLatest")}
+            </button>
           )}
-          <div ref={bottomRef} />
         </div>
 
         {contextFolder && worktreeVisible && (

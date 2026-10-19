@@ -1,70 +1,142 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import type { ChatMessage } from "../types";
 
-/**
- * Auto-scroll behavior for the chat messages container.
- *
- * - Tracks whether the user has manually scrolled up; pauses auto-scroll in that case.
- * - Re-engages auto-scroll when a new user message is sent.
- * - Exposes the container ref and a bottom sentinel ref to be placed in JSX.
- */
-export function useChatScroll(messages: ChatMessage[]): {
+// @lat: [[chat-performance#Bottom follow ownership]]
+export function useChatScroll(
+  messages: ChatMessage[],
+  scope = "chat",
+): {
   containerRef: React.RefObject<HTMLDivElement | null>;
+  contentRef: React.RefObject<HTMLDivElement | null>;
   bottomRef: React.RefObject<HTMLDivElement | null>;
+  isFollowing: boolean;
+  jumpToLatest: () => void;
 } {
   const containerRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
-  const userScrolledUpRef = useRef(false);
+  const followingRef = useRef(true);
+  const [isFollowing, setIsFollowing] = useState(true);
+  const previousTopRef = useRef(0);
   const prevMessageCountRef = useRef(messages.length);
   const initialScrollDoneRef = useRef(false);
+  const frameRef = useRef<number | null>(null);
 
-  const scrollToBottom = useCallback((force?: boolean, instant?: boolean) => {
-    if (!force && userScrolledUpRef.current) return;
-    bottomRef.current?.scrollIntoView({
-      behavior: instant ? "auto" : "smooth",
-    });
+  const cancelFrame = useCallback(() => {
+    if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    frameRef.current = null;
   }, []);
-
-  // Track manual scroll position
-  useEffect(() => {
+  const follow = useCallback((value: boolean) => {
+    followingRef.current = value;
+    setIsFollowing(value);
+  }, []);
+  const writeBottom = useCallback(() => {
     const container = containerRef.current;
     if (!container) return;
-    function handleScroll(): void {
-      const el = container!;
-      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-      userScrolledUpRef.current = !atBottom;
-    }
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
+    // Instant writes have no intermediate smooth-scroll positions that could
+    // be mistaken for manual reading. Read the latest dimensions at delivery.
+    container.scrollTop = Math.max(
+      0,
+      container.scrollHeight - container.clientHeight,
+    );
+    previousTopRef.current = container.scrollTop;
   }, []);
+  const scheduleFollow = useCallback(() => {
+    if (!followingRef.current || frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      if (followingRef.current) writeBottom();
+    });
+  }, [writeBottom]);
+  const jumpToLatest = useCallback(() => {
+    follow(true);
+    scheduleFollow();
+  }, [follow, scheduleFollow]);
 
-  // Auto-scroll on incoming messages; force-scroll when user sends a new one
-  useEffect(() => {
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const content = contentRef.current;
+    if (!container || !content) return;
+    initialScrollDoneRef.current = false;
+    prevMessageCountRef.current = 0;
+    previousTopRef.current = container.scrollTop;
+    follow(true);
+    const pause = (): void => {
+      follow(false);
+      cancelFrame();
+    };
+    const handleScroll = (): void => {
+      const top = container.scrollTop;
+      const bottomDistance =
+        container.scrollHeight - top - container.clientHeight;
+      // Lazy row sizing can clamp scrollTop downward at the actual bottom.
+      // That correction is not upward reading; allow subpixel rounding only.
+      if (top < previousTopRef.current && bottomDistance >= 1) pause();
+      else if (bottomDistance < 60 && top > previousTopRef.current)
+        follow(true);
+      // Height growth alone does not imply a change in the reader's intent.
+      previousTopRef.current = top;
+    };
+    const handleWheel = (event: WheelEvent): void => {
+      if (event.deltaY < 0 && container.scrollHeight > container.clientHeight)
+        pause();
+    };
+    const handleKey = (event: KeyboardEvent): void => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false" i])',
+        )
+      )
+        return;
+      if (
+        ["ArrowUp", "PageUp", "Home"].includes(event.key) ||
+        (event.key === " " && event.shiftKey)
+      )
+        pause();
+    };
+    container.addEventListener("scroll", handleScroll, { passive: true });
+    container.addEventListener("wheel", handleWheel, { passive: true });
+    container.addEventListener("keydown", handleKey);
+    // The viewport alone does not resize when an existing transcript row
+    // grows. Observe the block-flow content too, including media/lazy layout.
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(scheduleFollow);
+    observer?.observe(container);
+    observer?.observe(content);
+    return () => {
+      cancelFrame();
+      observer?.disconnect();
+      container.removeEventListener("scroll", handleScroll);
+      container.removeEventListener("wheel", handleWheel);
+      container.removeEventListener("keydown", handleKey);
+    };
+  }, [scope, cancelFrame, follow, scheduleFollow]);
+
+  useLayoutEffect(() => {
     const prevCount = prevMessageCountRef.current;
     prevMessageCountRef.current = messages.length;
-    // History (re)load — first non-empty paint of a transcript: jump to the
-    // bottom instantly. A smooth multi-frame scroll from the top races the
-    // transcript windowing's auto-expand observer (the top marker is still in
-    // view when the observer's first callback is delivered), and its scroll
-    // restore would abort the smooth scroll and strand the view mid-transcript.
-    const historyLoaded =
-      messages.length > 0 && (!initialScrollDoneRef.current || prevCount === 0);
-    if (messages.length > 0) initialScrollDoneRef.current = true;
-    if (historyLoaded) {
-      userScrolledUpRef.current = false;
-      scrollToBottom(true, true);
+    if (messages.length === 0) {
+      initialScrollDoneRef.current = false;
       return;
     }
-    const userJustSent =
-      messages.length > prevCount &&
-      messages[messages.length - 1]?.role === "user";
-    if (userJustSent) {
-      userScrolledUpRef.current = false;
-      scrollToBottom(true);
-    } else {
-      scrollToBottom();
+    if (!initialScrollDoneRef.current || prevCount === 0) {
+      initialScrollDoneRef.current = true;
+      follow(true);
+      cancelFrame();
+      // History loads remain instant before the top expansion observer runs.
+      writeBottom();
+      return;
     }
-  }, [messages, scrollToBottom]);
+    if (
+      messages.length > prevCount &&
+      messages[messages.length - 1]?.role === "user"
+    )
+      follow(true);
+    scheduleFollow();
+  }, [messages, scope, cancelFrame, follow, scheduleFollow, writeBottom]);
 
-  return { containerRef, bottomRef };
+  return { containerRef, contentRef, bottomRef, isFollowing, jumpToLatest };
 }

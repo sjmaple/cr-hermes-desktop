@@ -4896,6 +4896,34 @@ body:has(.shell-vibrant),
      comes from each row's own bottom margin/padding. */
 }
 
+.chat-transcript-pane {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+}
+
+.chat-transcript {
+  min-height: 100%;
+}
+
+.chat-transcript:has(> .chat-empty) {
+  height: 100%;
+}
+
+.chat-jump-latest {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 1px solid var(--border-primary);
+  border-radius: var(--radius-lg);
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
 /* "Show N earlier messages" — collapses the transcript head in long sessions
    (windowing, the React-tree half of the #748 input-lag fix). */
 .chat-transcript-earlier {

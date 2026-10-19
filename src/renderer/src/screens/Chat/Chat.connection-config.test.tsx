@@ -1178,3 +1178,86 @@ it("keeps the empty chat avatar on its run profile and updates it with that run"
     ).toBeNull();
   });
 });
+
+// @lat: [[chat-performance#Bottom follow ownership#Actual Chat control and transcript observation]]
+it("actual Chat observes its transcript and exposes Jump to latest only while reading earlier content", async () => {
+  await fixture();
+  const records: Array<{
+    callback: ResizeObserverCallback;
+    targets: Element[];
+    disconnected: boolean;
+  }> = [];
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      record: (typeof records)[number];
+      constructor(callback: ResizeObserverCallback) {
+        this.record = { callback, targets: [], disconnected: false };
+        records.push(this.record);
+      }
+      observe(target: Element): void {
+        this.record.targets.push(target);
+      }
+      disconnect(): void {
+        this.record.disconnected = true;
+      }
+    },
+  );
+  const frames = new Map<number, FrameRequestCallback>();
+  let frame = 0;
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    frames.set(++frame, callback);
+    return frame;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) => frames.delete(id));
+  const view = renderChat();
+  await waitFor(() =>
+    expect(gateway.request).toHaveBeenCalledWith(
+      "commands.catalog",
+      expect.anything(),
+    ),
+  );
+  const viewport = view.container.querySelector(
+    ".chat-messages",
+  ) as HTMLDivElement;
+  const content = view.container.querySelector(".chat-transcript")!;
+  let height = 700;
+  let top = 400;
+  Object.defineProperties(viewport, {
+    scrollHeight: { configurable: true, get: () => height },
+    clientHeight: { configurable: true, get: () => 300 },
+    scrollTop: {
+      configurable: true,
+      get: () => top,
+      set: (value: number) => {
+        top = Math.min(value, height - 300);
+      },
+    },
+  });
+  const flush = (): void => {
+    act(() => {
+      const callbacks = [...frames.values()];
+      frames.clear();
+      callbacks.forEach((callback) => callback(1));
+    });
+  };
+  const observer = records.find((record) => record.targets.includes(content))!;
+  expect(observer.targets).toContain(viewport);
+  fireEvent.scroll(viewport);
+  top = 40;
+  fireEvent.scroll(viewport);
+  const jump = screen.getByRole("button", { name: "chat.jumpToLatest" });
+  height = 1200;
+  act(() => observer.callback([], {} as ResizeObserver));
+  flush();
+  expect(top).toBe(40);
+  fireEvent.click(jump);
+  flush();
+  expect(top).toBe(900);
+  expect(
+    screen.queryByRole("button", { name: "chat.jumpToLatest" }),
+  ).not.toBeInTheDocument();
+  view.unmount();
+  expect(observer.disconnected).toBe(true);
+  vi.unstubAllGlobals();
+});
