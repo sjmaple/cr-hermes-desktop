@@ -46,6 +46,8 @@ export default {
   devOnly: "Developer only",
   updateAvailable: "Update v{{version}}",
   downloading: "Downloading {{percent}}%",
+  downloadingUnknown: "Downloading...",
+  waitingForDownloadProgress: "Waiting for download progress...",
   restartToUpdate: "Restart to update",
   updateFailed: "Update failed",
   errorTitle: "Something went wrong",

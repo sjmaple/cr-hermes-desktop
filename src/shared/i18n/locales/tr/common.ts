@@ -41,6 +41,8 @@ export default {
   devOnly: "Yalnızca geliştirici",
   updateAvailable: "Güncelleme v{{version}}",
   downloading: "İndiriliyor {{percent}}%",
+  downloadingUnknown: "İndiriliyor...",
+  waitingForDownloadProgress: "İndirme ilerlemesi bekleniyor...",
   restartToUpdate: "Güncellemek için yeniden başlat",
   updateFailed: "Güncelleme başarısız",
   errorTitle: "Bir şeyler ters gitti",

@@ -903,9 +903,36 @@ export function registerIpcHandlers(context: IpcContext): void {
     if (conn.mode === "ssh" && conn.ssh) return sshRunDoctor(conn.ssh);
     return runHermesDoctor();
   });
-  ipcMain.handle("run-hermes-update", async (event) => {
+  ipcMain.handle("run-hermes-update", async (event, requestId?: string) => {
     try {
       const conn = getConnectionConfig();
+      const owner =
+        typeof requestId === "string" &&
+        requestId.length > 0 &&
+        requestId.length <= 128
+          ? { requestId }
+          : {};
+      const sendProgress = (progress: InstallProgress): void => {
+        // Progress is best effort: closing a window must not abort its update.
+        try {
+          if (!event.sender.isDestroyed())
+            event.sender.send("install-progress", { ...progress, ...owner });
+        } catch {
+          // The receiver can disappear between the lifetime check and send.
+        }
+      };
+      let updateLog = "";
+      const phase = (title: string, detail: string): void => {
+        updateLog += detail + "\n";
+        sendProgress({
+          operation: "update",
+          step: 0,
+          totalSteps: 0,
+          title,
+          detail,
+          log: updateLog,
+        });
+      };
       if (conn.mode === "remote") {
         return {
           success: false,
@@ -914,50 +941,50 @@ export function registerIpcHandlers(context: IpcContext): void {
         };
       }
       if (conn.mode === "ssh" && conn.ssh) {
-        event.sender.send("install-progress", {
-          step: 1,
-          totalSteps: 1,
-          title: "Updating remote Hermes Agent",
-          detail: "Running hermes update over SSH...",
-          log: "Running hermes update over SSH...\n",
-        });
+        phase(
+          "Updating remote Hermes Agent",
+          "Running hermes update over SSH...",
+        );
         await sshRunUpdate(conn.ssh);
+        phase(
+          "Checking dashboard compatibility",
+          "Validating the updated remote Agent...",
+        );
         const compat = await ensureSshDashboardCompatibility(conn.ssh);
-        if (!compat.ok) {
-          event.sender.send("install-progress", {
-            step: 1,
-            totalSteps: 1,
-            title: "Updating remote Hermes Agent",
-            detail: "Dashboard compatibility check needs attention.",
-            log: `Dashboard compatibility warning: ${
-              compat.error ? `${compat.detail}: ${compat.error}` : compat.detail
-            }\n`,
-          });
-        }
+        if (!compat.ok)
+          phase(
+            "Dashboard compatibility needs attention",
+            compat.error ? `${compat.detail}: ${compat.error}` : compat.detail,
+          );
+        phase("Restarting gateway", "Starting the updated remote gateway...");
         await sshStartGateway(conn.ssh);
+        phase("Reconnecting tunnel", "Restoring the SSH connection...");
         await startSshTunnel(conn.ssh);
         // Authoritative SSH credential is the remote API_SERVER_KEY (see
         // getSshDashboardSessionConfig); conn.apiKey is remote-mode-only.
+        phase(
+          "Refreshing connection",
+          "Reading the remote gateway credential...",
+        );
         const key = (await sshReadRemoteApiKey(conn.ssh)).trim();
         setSshRemoteApiKey(key);
         clearAgentCapabilityEvidence(getActiveConnection().connectionId);
         return { success: true };
       }
       await runHermesUpdate((progress: InstallProgress) => {
-        event.sender.send("install-progress", progress);
+        updateLog = progress.log;
+        sendProgress(progress);
       });
+      phase(
+        "Checking dashboard compatibility",
+        "Validating the updated Agent...",
+      );
       const compat = ensureLocalDashboardCompatibility();
-      if (!compat.ok) {
-        event.sender.send("install-progress", {
-          step: 1,
-          totalSteps: 1,
-          title: "Updating Hermes Agent",
-          detail: "Dashboard compatibility check needs attention.",
-          log: `Dashboard compatibility warning: ${
-            compat.error ? `${compat.detail}: ${compat.error}` : compat.detail
-          }\n`,
-        });
-      }
+      if (!compat.ok)
+        phase(
+          "Dashboard compatibility needs attention",
+          compat.error ? `${compat.detail}: ${compat.error}` : compat.detail,
+        );
       clearAgentCapabilityEvidence(getActiveConnection().connectionId);
       return { success: true };
     } catch (err) {

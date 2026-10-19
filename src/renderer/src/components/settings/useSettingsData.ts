@@ -1,3 +1,7 @@
+import type {
+  DownloadProgress,
+  InstallProgress,
+} from "../../../../shared/update-progress";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../useI18n";
 import { getAnalyticsConsent } from "../../utils/analytics";
@@ -45,6 +49,21 @@ export function useSettingsData(profile?: string) {
   const [doctorOutput, setDoctorOutput] = useState<string | null>(null);
   const [doctorRunning, setDoctorRunning] = useState(false);
   const [updating, setUpdating] = useState(false);
+  const [agentUpdateProgress, setAgentUpdateProgress] =
+    useState<InstallProgress | null>(null);
+  const updateLifetimeRef = useRef(0);
+  const updateBusyRef = useRef(false);
+  const updateProgressCleanupRef = useRef<(() => void) | null>(null);
+  const settingsMountedRef = useRef(true);
+  useEffect(() => {
+    settingsMountedRef.current = true;
+    return () => {
+      settingsMountedRef.current = false;
+      updateLifetimeRef.current += 1;
+      updateProgressCleanupRef.current?.();
+      updateProgressCleanupRef.current = null;
+    };
+  }, []);
   const [updateResult, setUpdateResult] = useState<string | null>(null);
   const [updateResultType, setUpdateResultType] = useState<
     "success" | "error" | null
@@ -99,6 +118,14 @@ export function useSettingsData(profile?: string) {
   const connLoaded = useRef(false);
   const [apiServerKeyMissing, setApiServerKeyMissing] = useState(false);
   const [generatingKey, setGeneratingKey] = useState(false);
+
+  useEffect(() => {
+    updateLifetimeRef.current += 1;
+    updateProgressCleanupRef.current?.();
+    updateProgressCleanupRef.current = null;
+    setAgentUpdateProgress(null);
+    setUpdateResult(null);
+  }, [profile, connectionId]);
 
   // SSH connection state
   const [sshHost, setSshHost] = useState("");
@@ -156,9 +183,8 @@ export function useSettingsData(profile?: string) {
   const [desktopUpdateVersion, setDesktopUpdateVersion] = useState<
     string | null
   >(null);
-  const [desktopUpdatePercent, setDesktopUpdatePercent] = useState<
-    number | null
-  >(null);
+  const [desktopUpdateProgress, setDesktopUpdateProgress] =
+    useState<DownloadProgress | null>(null);
   const [desktopUpdateError, setDesktopUpdateError] = useState<string | null>(
     null,
   );
@@ -178,6 +204,10 @@ export function useSettingsData(profile?: string) {
 
   const loadConfig = useCallback(async (): Promise<void> => {
     const requestId = ++loadConfigRequestRef.current;
+    updateProgressCleanupRef.current?.();
+    updateProgressCleanupRef.current = null;
+    setAgentUpdateProgress(null);
+    setUpdateResult(null);
     setHermesHome("");
     setHermesVersion(null);
     setAgentCapabilities(null);
@@ -313,13 +343,13 @@ export function useSettingsData(profile?: string) {
     const cleanupProgress = window.hermesAPI.onUpdateDownloadProgress(
       (info) => {
         setDesktopUpdateState("downloading");
-        setDesktopUpdatePercent(info.percent);
+        setDesktopUpdateProgress(info);
         setDesktopUpdateError(null);
       },
     );
     const cleanupDownloaded = window.hermesAPI.onUpdateDownloaded(() => {
       setDesktopUpdateState("ready");
-      setDesktopUpdatePercent(null);
+      setDesktopUpdateProgress(null);
       setDesktopUpdateError(null);
     });
     const cleanupError = window.hermesAPI.onUpdateError((message) => {
@@ -359,7 +389,7 @@ export function useSettingsData(profile?: string) {
     // "available" or "error" → (re)start the download. Set downloading state
     // immediately to block re-entrancy; `onUpdateDownloaded` flips to "ready".
     setDesktopUpdateState("downloading");
-    setDesktopUpdatePercent(null);
+    setDesktopUpdateProgress(null);
     setDesktopUpdateError(null);
     try {
       const ok = await window.hermesAPI.downloadUpdate();
@@ -860,17 +890,53 @@ export function useSettingsData(profile?: string) {
   }
 
   async function handleUpdateHermes(): Promise<void> {
+    if (updateBusyRef.current) return;
+    updateBusyRef.current = true;
+    const requestId = crypto.randomUUID();
+    const lifetime = updateLifetimeRef.current;
+    const configRead = loadConfigRequestRef.current;
+    const isCurrent = (): boolean =>
+      settingsMountedRef.current &&
+      lifetime === updateLifetimeRef.current &&
+      configRead === loadConfigRequestRef.current;
     setUpdating(true);
+    setAgentUpdateProgress(null);
     setUpdateResult(null);
-    const result = await window.hermesAPI.runHermesUpdate();
-    setUpdating(false);
-    if (result.success) {
-      setUpdateResult(t("settings.updateSuccess"));
-      setUpdateResultType("success");
-      refreshVersion();
-    } else {
-      setUpdateResult(result.error || t("settings.updateFailed"));
+    const cleanup = window.hermesAPI.onInstallProgress((progress) => {
+      if (
+        isCurrent() &&
+        progress.operation === "update" &&
+        progress.requestId === requestId
+      )
+        setAgentUpdateProgress(progress);
+    });
+    updateProgressCleanupRef.current = cleanup;
+    try {
+      const result = await window.hermesAPI.runHermesUpdate(requestId);
+      if (!isCurrent()) return;
+      setUpdateResult(
+        result.success
+          ? t("settings.updateSuccess")
+          : result.error || t("settings.updateFailed"),
+      );
+      setUpdateResultType(result.success ? "success" : "error");
+      if (result.success) refreshVersion();
+    } catch (err) {
+      if (!isCurrent()) return;
+      setUpdateResult(
+        err instanceof Error ? err.message : t("settings.updateFailed"),
+      );
       setUpdateResultType("error");
+    } finally {
+      updateBusyRef.current = false;
+      if (updateProgressCleanupRef.current === cleanup) {
+        cleanup();
+        updateProgressCleanupRef.current = null;
+      }
+      if (settingsMountedRef.current) {
+        setUpdating(false);
+        setAgentUpdateProgress(null);
+      }
     }
   }
 
@@ -905,6 +971,7 @@ export function useSettingsData(profile?: string) {
     doctorOutput,
     doctorRunning,
     updating,
+    agentUpdateProgress,
     updateResult,
     updateResultType,
     autoUpgradeEnabled,
@@ -919,7 +986,8 @@ export function useSettingsData(profile?: string) {
     // desktop app (Electron) update — separate channel from the engine update
     desktopUpdateState,
     desktopUpdateVersion,
-    desktopUpdatePercent,
+    desktopUpdatePercent: desktopUpdateProgress?.percent ?? null,
+    desktopUpdateProgress,
     desktopUpdateError,
     checkDesktopUpdate,
     handleDesktopUpdate,

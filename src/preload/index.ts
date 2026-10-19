@@ -1,4 +1,8 @@
 import type {
+  DownloadProgress,
+  InstallProgress,
+} from "../shared/update-progress";
+import type {
   SpeechRequest,
   SpeechSettings,
   SpeechConfigSetting,
@@ -187,27 +191,12 @@ const hermesAPI = {
   relaunchApp: (): Promise<void> => ipcRenderer.invoke("relaunch-app"),
 
   onInstallProgress: (
-    callback: (progress: {
-      step: number;
-      totalSteps: number;
-      title: string;
-      detail: string;
-      log: string;
-    }) => void,
+    callback: (progress: InstallProgress) => void,
   ): (() => void) => {
     const handler = (
       _event: Electron.IpcRendererEvent,
       progress: unknown,
-    ): void =>
-      callback(
-        progress as {
-          step: number;
-          totalSteps: number;
-          title: string;
-          detail: string;
-          log: string;
-        },
-      );
+    ): void => callback(progress as InstallProgress);
     ipcRenderer.on("install-progress", handler);
     return () => ipcRenderer.removeListener("install-progress", handler);
   },
@@ -243,8 +232,10 @@ const hermesAPI = {
     ),
   runHermesDoctor: (): Promise<string> =>
     ipcRenderer.invoke("run-hermes-doctor"),
-  runHermesUpdate: (): Promise<{ success: boolean; error?: string }> =>
-    ipcRenderer.invoke("run-hermes-update"),
+  runHermesUpdate: (
+    requestId?: string,
+  ): Promise<{ success: boolean; error?: string }> =>
+    ipcRenderer.invoke("run-hermes-update", requestId),
 
   // OpenClaw migration
   checkOpenClaw: (): Promise<{ found: boolean; path: string | null }> =>
@@ -1619,10 +1610,10 @@ const hermesAPI = {
   },
 
   onUpdateDownloadProgress: (
-    callback: (info: { percent: number }) => void,
+    callback: (info: DownloadProgress) => void,
   ): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, info: unknown): void =>
-      callback(info as { percent: number });
+      callback(info as DownloadProgress);
     ipcRenderer.on("update-download-progress", handler);
     return () =>
       ipcRenderer.removeListener("update-download-progress", handler);

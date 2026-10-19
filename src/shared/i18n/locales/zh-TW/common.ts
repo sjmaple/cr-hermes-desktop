@@ -40,6 +40,8 @@ export default {
   devOnly: "開發者專用",
   updateAvailable: "更新 v{{version}}",
   downloading: "下載中 {{percent}}%",
+  downloadingUnknown: "正在下載...",
+  waitingForDownloadProgress: "正在等待下載進度...",
   restartToUpdate: "重新啟動以更新",
   updateFailed: "更新失敗",
   errorTitle: "發生錯誤",

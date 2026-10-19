@@ -1380,6 +1380,34 @@ body:has(.shell-vibrant),
   background: linear-gradient(90deg, #3253b4 0%, #5b7ce0 100%);
   transition: width 0.35s ease;
 }
+.onboard-progress-fill--indeterminate {
+  width: 35%;
+  animation: onboardProgressActivity 1.4s ease-in-out infinite;
+}
+@keyframes onboardProgressActivity {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(390%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .onboard-progress-fill--indeterminate {
+    animation: none;
+  }
+}
+.sidebar-update-download {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.sidebar-update-download small {
+  font-size: 10px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .onboard-progress-fill--error {
   background: var(--error, #e5484d);
 }

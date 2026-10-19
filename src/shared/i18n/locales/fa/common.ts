@@ -46,6 +46,8 @@ export default {
   devOnly: "فقط برای توسعه‌دهندگان",
   updateAvailable: "به‌روزرسانی به نسخه {{version}}",
   downloading: "در حال دریافت {{percent}}٪",
+  downloadingUnknown: "در حال دریافت...",
+  waitingForDownloadProgress: "در انتظار پیشرفت دریافت...",
   restartToUpdate: "راه‌اندازی دوباره برای به‌روزرسانی",
   updateFailed: "به‌روزرسانی ناموفق بود",
   errorTitle: "خطایی رخ داد",

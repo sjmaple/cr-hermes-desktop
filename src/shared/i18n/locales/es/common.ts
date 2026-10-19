@@ -41,6 +41,8 @@ export default {
   devOnly: "Solo para desarrolladores",
   updateAvailable: "Actualizar a v{{version}}",
   downloading: "Descargando {{percent}}%",
+  downloadingUnknown: "Descargando...",
+  waitingForDownloadProgress: "Esperando el progreso de la descarga...",
   restartToUpdate: "Reiniciar para actualizar",
   updateFailed: "Error al actualizar",
   errorTitle: "Algo salió mal",

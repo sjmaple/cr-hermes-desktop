@@ -1,3 +1,4 @@
+import type { InstallProgress } from "../../../../shared/update-progress";
 import { useEffect, useState, useRef } from "react";
 import { ArrowRight, Copy, Send, Folder } from "../../assets/icons";
 import OnboardHero from "../../components/common/OnboardHero";
@@ -24,14 +25,6 @@ function InfoIcon(): React.JSX.Element {
       <path d="M12 8h.01" />
     </svg>
   );
-}
-
-interface InstallProgress {
-  step: number;
-  totalSteps: number;
-  title: string;
-  detail: string;
-  log: string;
 }
 
 interface InstallTarget {
@@ -162,11 +155,6 @@ function Install({
     }
   }
 
-  const percent =
-    progress.totalSteps > 0
-      ? Math.round((progress.step / progress.totalSteps) * 100)
-      : 0;
-
   if (phase === "confirm") {
     // After adopting an existing install, the choice only applies on the
     // next launch — ask the user to restart.
@@ -255,21 +243,34 @@ function Install({
               title
             ) : (
               <>
-                <b>
-                  Step {progress.step} of {progress.totalSteps}
-                </b>{" "}
-                · {progress.title}
+                {progress.totalSteps > 0 && (
+                  <>
+                    <b>
+                      Step {progress.step} of {progress.totalSteps}
+                    </b>{" "}
+                    ·{" "}
+                  </>
+                )}
+                {progress.title}
               </>
             )}
           </span>
           <span className="onboard-progress-percent">
-            {done ? 100 : percent}%
+            {done ? "100%" : null}
           </span>
         </div>
-        <div className="onboard-progress-track">
+        <div
+          className="onboard-progress-track"
+          role="progressbar"
+          aria-label={progress.title}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={done ? 100 : undefined}
+          aria-valuetext={failed || (done ? t("common.done") : progress.title)}
+        >
           <div
-            className={`onboard-progress-fill${failed ? " onboard-progress-fill--error" : ""}`}
-            style={{ width: `${done ? 100 : percent}%` }}
+            className={`onboard-progress-fill${failed ? " onboard-progress-fill--error" : !done ? " onboard-progress-fill--indeterminate" : ""}`}
+            style={{ width: done ? "100%" : failed ? "0%" : undefined }}
           />
         </div>
         {!done && !failed && (

@@ -32,7 +32,7 @@ The hero carries the "HERMES ONE" eyebrow, subtitle, a gradient "Get Started" pi
 
 The confirm view (eyebrow "SETUP", title "Before installing") shows the target path in an `.onboard-field`, a `.onboard-note-card` describing the fresh/update/replace state, and Install / Use-existing / Cancel actions.
 
-The progress view (`wide`) shows a step + percent header with a progress bar, then a **fixed-size** terminal log window (`.onboard-terminal`): its body has a constant height and scrolls internally, so streaming log lines never reflow the surrounding layout. The log auto-scrolls to the newest line.
+The progress view (`wide`) shows phase labels and an indeterminate bar while work is running; successful completion reaches 100 percent (see [[desktop-updates#Agent phases]]). It then shows then a **fixed-size** terminal log window (`.onboard-terminal`): its body has a constant height and scrolls internally, so streaming log lines never reflow the surrounding layout. The log auto-scrolls to the newest line.
 
 Unix execution follows the [[desktop-security#Runtime security#Verified Unix bootstrap|verified bootstrap boundary]] before running downloaded code.
 

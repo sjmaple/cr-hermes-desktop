@@ -2,6 +2,7 @@ import { app, ipcMain, type BrowserWindow } from "electron";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import type { AppUpdater } from "electron-updater";
 import { dirname, join } from "path";
+import { measuredDownloadProgress } from "../../shared/update-progress";
 import { updaterLogger } from "../updater-log";
 
 interface UpdaterDeps {
@@ -73,9 +74,10 @@ export function setupUpdater({ getMainWindow }: UpdaterDeps): void {
     });
   });
   autoUpdater.on("download-progress", (progress) => {
-    getMainWindow()?.webContents.send("update-download-progress", {
-      percent: Math.round(progress.percent),
-    });
+    getMainWindow()?.webContents.send(
+      "update-download-progress",
+      measuredDownloadProgress(progress),
+    );
   });
   autoUpdater.on("update-downloaded", () => {
     getMainWindow()?.webContents.send("update-downloaded");

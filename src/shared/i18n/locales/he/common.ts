@@ -41,6 +41,8 @@ export default {
   devOnly: "למפתחים בלבד",
   updateAvailable: "עדכון לגרסה v{{version}}",
   downloading: "מוריד {{percent}}%",
+  downloadingUnknown: "מוריד...",
+  waitingForDownloadProgress: "ממתין להתקדמות ההורדה...",
   restartToUpdate: "הפעל מחדש כדי לעדכן",
   updateFailed: "העדכון נכשל",
   errorTitle: "משהו השתבש",

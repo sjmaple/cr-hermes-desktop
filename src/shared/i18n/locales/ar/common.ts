@@ -44,6 +44,8 @@ export default {
   devOnly: "للمطورين فقط",
   updateAvailable: "تحديث v{{version}}",
   downloading: "جارٍ التحميل {{percent}}%",
+  downloadingUnknown: "جارٍ التنزيل...",
+  waitingForDownloadProgress: "في انتظار تقدم التنزيل...",
   restartToUpdate: "أعد التشغيل للتحديث",
   updateFailed: "فشل التحديث",
   errorTitle: "حدث خطأ ما",

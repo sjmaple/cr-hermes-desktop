@@ -14,6 +14,104 @@ Desktop users install release downloads. npm commands apply to source dependenci
 
 [README](../README.md) directs users to the project download site or GitHub Releases and distinguishes them from the source-checkout commands in the [Contributing Guide](../CONTRIBUTING.md). The README promises the guide's existing dependency and development commands (`npm install`, `npm run dev`), without implying the guide also documents source builds. The package name in `package.json` is build metadata, not an app installation command. Release workflows and `electron-builder.yml` remain the distribution source of truth.
 
+## Progress evidence
+
+Desktop downloads preserve measured bytes, speed and fractional percent. Unknown totals and inactive progress remain explicit rather than appearing as a frozen zero-percent download.
+
+[[src/main/app/updater.ts#setupUpdater]] forwards finite nonnegative metrics through [[src/shared/update-progress.ts#measuredDownloadProgress]]. Percent requires a known positive total; unknown totals omit it. About and the sidebar share [[src/renderer/src/components/common/useUpdateDownloadText.ts#useUpdateDownloadText]], with localized percent and byte formatting. Only `update-downloaded` enables the restart action.
+
+A one-shot 15-second deadline is active only while downloading and resets when byte/percent/total measurements change. If no new measurement arrives, the display retains known bytes, hides stale speed and explicitly waits for progress. Completion, error and unmount clear the deadline; there is no idle polling.
+
+This display does not prove differential downloads are used or reduce artifact size. Existing updater packaging and dependency strategies require separate release/runtime evidence before efficiency claims can be resolved.
+
+### Measured download events
+
+The actual updater registration receives synthetic download events and forwards fractional percent, bytes and speed without executing downloads or installations.
+
+### Unknown totals do not imply completion
+
+Invalid or unknown totals cannot produce measured percentages. Finite transferred bytes remain useful even when total size and speed are unavailable.
+
+### Invalid percent remains unknown
+
+A percentage outside the measured zero-to-one-hundred range remains unknown instead of being clamped into an apparently completed download.
+
+### About download measurements
+
+Actual About and Settings state retain byte totals and speed, show fractional progress and wait for the downloaded event before offering restart.
+
+### Unknown and inactive download feedback
+
+Unknown downloads omit fake zero-percent values. An inactive measurement triggers one waiting deadline, hides stale speed, retains bytes and recovers after progress resumes without persistent polling.
+
+## Agent phases
+
+Agent install and update steps describe subprocess phases, not measured work percentages. Running work stays indeterminate; successful IPC completion alone presents a completed result.
+
+[[src/main/installer.ts#runHermesUpdate]] emits update-scoped output with unknown step totals while its command runs. [[src/main/ipc/register.ts#registerIpcHandlers]] announces real SSH update, compatibility, gateway, tunnel and connection-refresh operations before awaiting them. Local updates announce compatibility validation after the command exits.
+
+Progress delivery is best effort. A closed or disappearing window cannot interrupt compatibility validation, gateway startup, tunnel reconnection or credential refresh. Delivery failures are isolated from real operation errors, which still fail the update result.
+
+[[src/renderer/src/components/settings/useSettingsData.ts#useSettingsData]] owns an update-only progress subscription correlated with a fresh opaque request ID, rejects late profile or connection reads and releases its listener after completion or unmount. About shows the captured phase and detail. [[src/renderer/src/screens/Install/Install.tsx#Install]] keeps phase labels but presents no running percentage; only its successful result reaches 100 percent.
+
+Phase visibility does not claim that upstream dependency work is incremental or optimized. Installer output remains diagnostic evidence, and the original efficiency reports need separate verification.
+
+### About phase lifetime
+
+About displays only the currently admitted Agent update phase, ignores migration events and clears its listener and phase after the result settles.
+
+### Changed profile rejects old progress
+
+Changing the About profile invalidates deferred update phases and results, so old success or failure cannot appear under the new profile.
+
+### Changed connection rejects old progress
+
+A same-ID connection reload clears the old phase and refuses its delayed callbacks and failure result without borrowing another target's progress.
+
+### Unmount releases the progress listener
+
+Closing About releases an active update listener immediately. A later subprocess result cannot register or release that listener a second time.
+
+### Reopened pane rejects another update job
+
+Closing and reopening About gives a new update its own request ID. A still-running earlier job cannot populate the reopened pane's phase or affect its result.
+
+### IPC echoes the update owner
+
+The actual update handler echoes a caller's bounded request ID on command and validation events; legacy callers remain supported without an ID.
+
+### Running phase is indeterminate
+
+Actual Install fixtures keep both one-step updates and final installer phases indeterminate while pending, and present 100 percent only after successful completion.
+
+### SSH phases follow operations
+
+The actual update IPC handler emits each SSH phase before its operation and keeps the pending command's total unknown without executing remote updates in tests.
+
+### Remote update refusal remains read-only
+
+The direct Remote mode keeps its existing host-side update guidance and never starts a local or SSH update through the desktop.
+
+### Closed windows do not interrupt SSH follow-up
+
+Closing the window during each awaited SSH update stage skips later UI delivery while compatibility, gateway, tunnel and credential work completes normally.
+
+### Progress delivery races are best effort
+
+A sender that disappears between its live check and send cannot abort update follow-up. Only progress delivery exceptions are discarded.
+
+### Closed windows do not interrupt Local validation
+
+Local command output remains safe after its window closes, and the update still validates compatibility and clears capability evidence.
+
+### Operation errors remain failures without a window
+
+The actual update callback still reports a failing SSH operation when no progress receiver remains; it neither hides the error nor runs unsafe later stages.
+
+### Local command is not measured progress
+
+The actual local updater receives synthetic child output and exit events; running and failed commands never turn their phase into measured completion.
+
 ## Stable and beta release channels
 
 Two GitHub Actions workflows publish builds; only the stable channel reaches end users' auto-update, so a beta can be tested without risking their devices.

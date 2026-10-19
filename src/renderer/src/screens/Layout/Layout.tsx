@@ -1,3 +1,5 @@
+import type { DownloadProgress } from "../../../../shared/update-progress";
+import { useUpdateDownloadText } from "../../components/common/useUpdateDownloadText";
 import {
   lazy,
   Suspense,
@@ -490,7 +492,13 @@ function Layout({
     "available" | "downloading" | "ready" | "error" | null
   >(null);
   const [updateVersion, setUpdateVersion] = useState<string | null>(null);
-  const [updatePercent, setUpdatePercent] = useState<number | null>(null);
+  const [updateProgress, setUpdateProgress] = useState<DownloadProgress | null>(
+    null,
+  );
+  const updateDownloadText = useUpdateDownloadText(
+    updateProgress,
+    updateState === "downloading",
+  );
   const [updateError, setUpdateError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -505,13 +513,13 @@ function Layout({
     const cleanupProgress = window.hermesAPI.onUpdateDownloadProgress(
       (info) => {
         setUpdateState("downloading");
-        setUpdatePercent(info.percent);
+        setUpdateProgress(info);
         setUpdateError(null);
       },
     );
     const cleanupDownloaded = window.hermesAPI.onUpdateDownloaded(() => {
       setUpdateState("ready");
-      setUpdatePercent(null);
+      setUpdateProgress(null);
       setUpdateError(null);
     });
     const cleanupError = window.hermesAPI.onUpdateError((message) => {
@@ -534,7 +542,7 @@ function Layout({
       // Download the available update (or retry a failed auto-download).
       // Set downloading state immediately to prevent re-entrancy.
       setUpdateState("downloading");
-      setUpdatePercent(null);
+      setUpdateProgress(null);
       setUpdateError(null);
       try {
         const ok = await window.hermesAPI.downloadUpdate();
@@ -552,9 +560,7 @@ function Layout({
     (updateState === "available" && updateVersion
       ? t("common.updateAvailable", { version: updateVersion })
       : updateState === "downloading"
-        ? updatePercent === null
-          ? t("common.downloading", { percent: 0 })
-          : t("common.downloading", { percent: updatePercent })
+        ? updateDownloadText.text
         : updateState === "ready"
           ? t("common.restartToUpdate")
           : updateState === "error"
@@ -941,8 +947,11 @@ function Layout({
                   </span>
                 )}
                 {updateState === "downloading" && (
-                  <span>
-                    {t("common.downloading", { percent: updatePercent ?? 0 })}
+                  <span className="sidebar-update-download">
+                    <span>{updateDownloadText.title}</span>
+                    {updateDownloadText.detail && (
+                      <small dir="ltr">{updateDownloadText.detail}</small>
+                    )}
                   </span>
                 )}
                 {updateState === "ready" && (

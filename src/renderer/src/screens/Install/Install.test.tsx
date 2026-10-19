@@ -72,4 +72,72 @@ describe("Install", () => {
       "fr:install.installationFailedHint",
     );
   });
+  // @lat: [[desktop-updates#Agent phases#Running phase is indeterminate]]
+  it.each([
+    [1, 1],
+    [7, 7],
+  ])(
+    "does not label a running phase %i/%i as 100 percent",
+    async (step, totalSteps) => {
+      let progress:
+        | ((p: {
+            step: number;
+            totalSteps: number;
+            title: string;
+            detail: string;
+            log: string;
+          }) => void)
+        | undefined;
+      let finish: ((result: { success: boolean }) => void) | undefined;
+      Object.defineProperty(window, "hermesAPI", {
+        configurable: true,
+        value: {
+          inspectInstallTarget: vi.fn(async () => ({
+            hermesHome: "/isolated/home",
+            repoPath: "/isolated/agent",
+            state: "update",
+          })),
+          onInstallProgress: vi.fn((cb) => {
+            progress = cb;
+            return vi.fn();
+          }),
+          startInstall: vi.fn(
+            () =>
+              new Promise((resolve) => {
+                finish = resolve;
+              }),
+          ),
+        },
+      });
+      render(
+        <Install onComplete={vi.fn()} onFailed={vi.fn()} onCancel={vi.fn()} />,
+      );
+      fireEvent.click(screen.getByText("en:install.confirmInstallBtn"));
+      await waitFor(() =>
+        expect(window.hermesAPI.startInstall).toHaveBeenCalledOnce(),
+      );
+      act(() =>
+        progress?.({
+          step,
+          totalSteps,
+          title: "Updating Agent",
+          detail: "Subprocess still running",
+          log: "running\n",
+        }),
+      );
+      expect(screen.queryByText("100%")).not.toBeInTheDocument();
+      expect(screen.getByRole("progressbar")).not.toHaveAttribute(
+        "aria-valuenow",
+      );
+      expect(screen.getByText("Subprocess still running")).toBeInTheDocument();
+      await act(async () => {
+        finish?.({ success: true });
+      });
+      expect(screen.getByText("100%")).toBeInTheDocument();
+      expect(screen.getByRole("progressbar")).toHaveAttribute(
+        "aria-valuenow",
+        "100",
+      );
+    },
+  );
 });
