@@ -353,6 +353,8 @@ function activeAuthFile(profile: string): string {
 // See issue #236.
 const PROVIDER_ENV_KEYS: Record<string, string> = {
   openrouter: "OPENROUTER_API_KEY",
+  "opencode-zen": "OPENCODE_ZEN_API_KEY",
+  "opencode-go": "OPENCODE_GO_API_KEY",
   anthropic: "ANTHROPIC_API_KEY",
   openai: "OPENAI_API_KEY",
   "ollama-cloud": "OLLAMA_API_KEY",

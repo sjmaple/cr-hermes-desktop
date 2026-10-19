@@ -10,6 +10,24 @@ Setup saves credentials and model configuration to the profile returned by the s
 
 The first-run gate is profile-aware: `checkInstall` decides whether setup is needed for the active profile, so [[src/renderer/src/App.tsx#App]] passes that profile into [[src/renderer/src/screens/Setup/Setup.tsx#Setup]]. Setup writes both `.env` and `config.yaml` to the same profile, preventing a named active profile from losing the key to the default workspace. Only the latest completed install check may update the setup profile, so an older check cannot overwrite the profile chosen by a newer startup attempt.
 
+## OpenCode Zen and Go
+
+Zen and Go are selectable native Agent providers in setup and model pickers, with distinct credentials and canonical endpoints.
+
+[[src/renderer/src/constants.ts#PROVIDERS]] exposes both options and setup cards. Existing keyed provider cards and labels retain `OPENCODE_ZEN_API_KEY` / `OPENCODE_GO_API_KEY`; [[src/renderer/src/constants.ts#providerRouteForEnvKey]] preserves the native `opencode-zen` / `opencode-go` slugs. They never become generic `custom` providers.
+
+[[src/main/provider-registry.ts#canonicalProviderBaseUrl]] supplies `https://opencode.ai/zen/v1` and `https://opencode.ai/zen/go/v1`. These match the current Agent registry and the official [Zen](https://opencode.ai/docs/zen/#endpoints) and [Go](https://opencode.ai/docs/go/#endpoints) APIs. [[src/main/installer.ts#expectedEnvKeyForModel]] resolves their separate keys for profile-scoped discovery/readiness. The Agent retains per-model API-mode selection; the desktop does not force every OpenCode model onto one protocol.
+
+Setup leaves the model blank when the user has not selected one; there is no invented catalog/default model. Credentials and subsequent user-selected model writes stay on the selected default or named profile. Availability, billing, and service/client policy remain provider-owned; this integration performs no live credential validation.
+
+### Profile-scoped setup and selection
+
+Actual setup cards write their own credential and native provider to temporary default/named profiles, replace a stale provider endpoint, preserve a later explicit model choice, and leave the other profile's files untouched.
+
+### Unrelated keys cannot authenticate OpenCode
+
+Discovery without the selected profile's matching OpenCode key reports no-key and makes no HTTP request, even when an unrelated key or another profile's valid key exists.
+
 ## Hermes One is the first-priority provider
 
 **Hermes One Inference** (`https://inference.hermesone.org/v1`) is Hermes One's own OpenAI-compatible gateway, listed **first** in `PROVIDERS.setup`, `PROVIDER_CARDS`, and the `SETTINGS_SECTIONS` "LLM Providers" items — so it leads the Add-provider picker.

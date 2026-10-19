@@ -15,6 +15,8 @@
 export const PROVIDER_BASE_URLS: Record<string, string> = {
   openai: "https://api.openai.com/v1",
   openrouter: "https://openrouter.ai/api/v1",
+  "opencode-zen": "https://opencode.ai/zen/v1",
+  "opencode-go": "https://opencode.ai/zen/go/v1",
   "ollama-cloud": "https://ollama.com/v1",
   aimlapi: "https://api.aimlapi.com/v1",
   deepseek: "https://api.deepseek.com/v1",
