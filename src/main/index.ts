@@ -1,3 +1,4 @@
+import "./system-ca-trust";
 import { app } from "electron";
 import { applyGpuPreferences, installGpuCrashGuard } from "./gpu-fallback";
 import { startMainProcess } from "./app/start";

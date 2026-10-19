@@ -14,6 +14,16 @@ The first-run `connect-remote-gateway` operation in [[src/main/ipc/register.ts#r
 
 The public startup probe uses `/api/status` without a stored token after OAuth is selected, avoiding the authenticated `/health` redirect and stale-token false negatives.
 
+## Node system certificate trust
+
+Main-process Node HTTPS and onboarding fetch include trusted operating-system roots without weakening certificate or hostname verification.
+
+[[src/main/system-ca-trust.ts#initializeSystemCertificateTrust]] unions `tls.getCACertificates("default")` with `"system"` and installs the deduplicated result. Existing bundled, extra, and custom defaults remain trusted. The side-effect import is first in [[src/main/index.ts]], before consumers can cache TLS sessions. Electron cookie-backed OAuth transport is unchanged.
+
+Both APIs are feature-detected. Older development Node runtimes retain their existing defaults; a system-store lookup or setter failure logs a warning and keeps verification enabled. The packaged Electron 44 runtime supports the APIs. Node documents the getter from 22.15 and the setter from 22.19 (also 24.5) in its [TLS API reference](https://nodejs.org/api/tls.html#tlssetdefaultcacertificatescerts). Trust changes apply to the main thread; no OS trust store or user configuration is modified.
+
+A private/self-signed root must already be trusted by the operating system or supplied through supported Node extra-CA configuration. Arbitrary untrusted endpoints still fail. Native OS-store installation is outside the isolated regression proof.
+
 ## Credential boundary
 
 OAuth cookies live only in a dedicated persistent Electron session owned by main process.
@@ -135,3 +145,25 @@ Explicit token dashboards without configured keys can list MCP servers anonymous
 ### Reverse proxy discovery
 
 Automatic detection forwards configured Basic proxy credentials to status and raw-health probes without putting userinfo in fetch URLs, while non-proxy raw gateways retain their Bearer header.
+
+### Certificate defaults are preserved
+
+Extending system trust retains bundled, extra, and existing custom roots, deduplicates overlaps, and leaves the original selection unchanged.
+
+### Unsupported TLS runtimes keep defaults
+
+A runtime missing either CA getter or setter keeps its existing trust rather than partially changing certificate validation.
+
+### System trust lookup failures remain verified
+
+A failed system-store read never invokes the setter or enables a permissive certificate or hostname fallback.
+
+### Invalid system roots keep verification
+
+A setter rejection is reported as unavailable without changing any request verification options.
+
+### Real TLS requests honor selected system trust
+
+An actual Electron run-as-Node child loads the real main entry before networking consumers, trusts a temporary system root for shared HTTPS and onboarding fetch, preserves extra CAs, and rejects unrelated roots and hostname mismatches.
+
+The child substitutes only its system-store getter and isolates non-network UI startup. Real TLS, the production bootstrap, proxy/token headers, and captured profile routing execute against temporary loopback servers. Generated keys are deleted; no certificate bytes or OS/application trust settings are written. This fixture skips when the OpenSSL certificate-generation executable is absent; portable unit checks stay active. It validates runtime trust behavior, not a native Keychain or Linux/Windows store installation.
