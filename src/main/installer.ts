@@ -11,17 +11,28 @@ import {
   writeFileSync,
   unlinkSync,
 } from "fs";
-import { join, delimiter, resolve } from "path";
+import { join, delimiter, resolve, basename } from "path";
 import { homedir, tmpdir } from "os";
 import { createHash, randomBytes } from "crypto";
-import { app, type BrowserWindow } from "electron";
+import {
+  app,
+  dialog,
+  type BrowserWindow,
+  type MessageBoxOptions,
+} from "electron";
 import {
   getConnectionConfig,
   getModelConfig,
   hasOAuthCredentials,
 } from "./config";
 import { providerDoesNotNeedApiKey } from "./providers";
-import { getActiveProfileNameSync, profileHome, stripAnsi } from "./utils";
+import {
+  getActiveProfileNameSync,
+  isValidProfileName,
+  PROFILE_NAME_ERROR,
+  profileHome,
+  stripAnsi,
+} from "./utils";
 import { setupAskpass, AskpassHandle } from "./askpass";
 import { precacheSudoCredentials } from "./sudoCreds";
 import { HIDDEN_SUBPROCESS_OPTIONS } from "./process-options";
@@ -1264,7 +1275,14 @@ export async function runHermesBackup(
 export async function runHermesImport(
   archivePath: string,
   profile?: string,
+  parentWindow?: BrowserWindow | null,
 ): Promise<{ success: boolean; error?: string }> {
+  if (getConnectionConfig().mode !== "local") {
+    return {
+      success: false,
+      error: "Backup import requires a Local connection.",
+    };
+  }
   const archive = validateImportArchivePath(archivePath);
   if (!archive.success) {
     return { success: false, error: archive.error };
@@ -1273,9 +1291,39 @@ export async function runHermesImport(
   if (!existsSync(HERMES_PYTHON) || !existsSync(HERMES_SCRIPT)) {
     return { success: false, error: "Hermes is not installed." };
   }
+  const targetProfile = profile || getActiveProfileNameSync();
+  if (!isValidProfileName(targetProfile)) {
+    return { success: false, error: PROFILE_NAME_ERROR };
+  }
+  const options: MessageBoxOptions = {
+    type: "warning",
+    title: "Restore Hermes backup",
+    message: "Restore this Hermes backup?",
+    detail: `Archive: ${basename(archive.path)}\nLocal profile: "${targetProfile}"\n\nThis replaces configuration, credentials, sessions and other backup contents. Provider backups may also restore files outside this profile.`,
+    buttons: ["Cancel", "Restore backup"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true,
+  };
+  try {
+    const result =
+      parentWindow && !parentWindow.isDestroyed()
+        ? await dialog.showMessageBox(parentWindow, options)
+        : await dialog.showMessageBox(options);
+    if (result.response !== 1) {
+      return { success: false, error: "Backup import cancelled." };
+    }
+  } catch {
+    return { success: false, error: "Could not confirm backup import." };
+  }
+  if (getConnectionConfig().mode !== "local") {
+    return {
+      success: false,
+      error: "Connection changed; backup import cancelled.",
+    };
+  }
   const args = hermesCliArgs();
-  if (profile && profile !== "default") args.push("-p", profile);
-  args.push("import", archive.path);
+  args.push("-p", targetProfile, "import", archive.path, "--force");
 
   return new Promise((resolve) => {
     execFile(
@@ -1293,11 +1341,11 @@ export async function runHermesImport(
         timeout: 120000,
         ...HIDDEN_SUBPROCESS_OPTIONS,
       },
-      (error, _stdout, stderr) => {
+      (error, stdout, stderr) => {
         if (error) {
           resolve({
             success: false,
-            error: stripAnsi(stderr || error.message).slice(0, 500),
+            error: stripAnsi(stderr || stdout || error.message).slice(0, 500),
           });
           return;
         }

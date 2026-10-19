@@ -3921,7 +3921,7 @@ export function registerIpcHandlers(context: IpcContext): void {
   ipcMain.handle(
     "run-hermes-import",
     (_event, archivePath: string, profile?: string) =>
-      runHermesImport(archivePath, profile),
+      runHermesImport(archivePath, profile, getMainWindow()),
   );
 
   // Debug dump

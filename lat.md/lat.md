@@ -61,3 +61,4 @@ This directory defines the high-level concepts, business logic, and architecture
 
 - [[external-memory-providers]] — Optional external memory discovery and Local Graphnosis registration.
 - [[external-memory-providers-tests]] — Isolated discovery and captured-registration tests.
+- [[backup-import]] — Native consent, explicit captured Local profile and diagnostic preservation for backup restore.
