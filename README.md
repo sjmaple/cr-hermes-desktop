@@ -66,6 +66,10 @@ Instead of managing the CLI by hand, the app walks through install, provider set
 
 <a href="https://hermesone.org"><img width="380" alt="Download Now" src="previews/download.webp" /></a>
 
+Download the desktop app for your operating system from [hermesone.org](https://hermesone.org) or [GitHub Releases](https://github.com/fathah/hermes-desktop/releases). `npm install hermes-desktop` is not a supported desktop app installation method.
+
+To run the app in development, clone this repository and follow the [Contributing Guide](CONTRIBUTING.md#getting-started). Its `npm install` step installs dependencies inside the source checkout.
+
 <details>
 <summary>Windows</summary>
 <br/>
@@ -327,7 +331,7 @@ Source of truth: [`src/main/secrets/`](src/main/secrets/).
 - The desktop app depends on the upstream Hermes Agent project for agent behavior and tool execution.
 - The built-in installer runs the official Hermes install script with `--skip-setup`, then completes provider configuration in the GUI.
 - Local model providers do not require an API key, but the compatible server must already be running.
-- Alternative npm registry routes are supported for environments with restricted network access.
+- The npm commands in the Contributing Guide apply to a source checkout's dependencies and development workflow.
 
 ## Contributing
 
