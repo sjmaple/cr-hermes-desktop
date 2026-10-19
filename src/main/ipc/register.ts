@@ -3392,9 +3392,13 @@ export function registerIpcHandlers(context: IpcContext): void {
   ipcMain.handle("list-models", () => {
     const conn = getConnectionConfig();
     if (conn.mode === "remote") {
-      if (conn.remoteChatTransport === "legacy") {
+      if (
+        conn.remoteChatTransport === "legacy" &&
+        getRemoteSelectedProfile(getActiveConnection().connectionId, conn) !==
+          "default"
+      ) {
         throw new Error(
-          "Remote model library reads require dashboard transport.",
+          "Named Remote Legacy model library reads require dashboard transport.",
         );
       }
       return remoteListModels(conn);

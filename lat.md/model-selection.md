@@ -30,6 +30,30 @@ This matters for fresh named profiles: `/api/model/library` may contain only the
 
 A named remote profile whose saved library contains only its active model still lists the other models advertised by that active provider, and both dashboard requests retain the profile query parameter.
 
+### Legacy gateway read-only inventory
+
+An explicitly selected Remote Legacy transport can read its gateway's default model catalog through authenticated HTTP without enabling Dashboard-only model-library mutations.
+
+The actual raw Agent server exposes authenticated `GET /api/model/options` and can omit `/api/model/library`. [[src/main/remote-models.ts#remoteListModels]] keeps its existing library-to-options fallback, and the registered `list-models` callback admits this read for the default/server profile. The preload call carries no explicit profile argument; this repair does not add named raw-server routing.
+
+### Named Legacy selection is not a default catalog
+
+An explicitly selected named Remote Legacy profile is refused before HTTP dispatch rather than silently reading the gateway's default or process-profile catalog.
+
+[[src/main/remote-profile-selection.ts#getRemoteSelectedProfile]] resolves the selected profile for the captured active connection. Named Dashboard requests continue using their existing profile query; raw Agent named-profile routes require `/p/<profile>` and are outside this read-only repair.
+
+### Legacy inventory failure stays remote
+
+Unauthorized, absent, or non-JSON inventory replies remain visible failures and never substitute a local model library, profile, or credential.
+
+The actual IPC callback tests use the real Remote HTTP adapter against a Bearer-only loopback fixture with a missing library route and authenticated options inventory. They verify 401, 404, and HTML failures without local reads.
+
+### Legacy model mutations stay refused
+
+Allowing Legacy catalog reads leaves add, remove, and update model-library IPC refused because those operations still require Dashboard transport.
+
+The regression invokes each registered mutation callback and verifies that no Remote or Local mutation helper and no HTTP endpoint is called.
+
 ## Full identity, not just the model name
 
 The override is a `SessionModelOverride` (`{provider, model, baseUrl}`), not a bare model string — because switching across providers must change routing, not only the `model` field.
