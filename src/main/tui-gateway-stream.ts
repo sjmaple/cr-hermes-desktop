@@ -74,7 +74,39 @@ export function gatewayCompletionSuffix(
     return finalText.slice(streamedText.length);
   }
   if (finalText.trim() === streamedText.trim()) return "";
-  return "";
+
+  // @lat: [[chat-commands#Legacy completion tail recovery]]
+  // Compare the complete streamed prefix, allowing only whitespace runs to
+  // differ. Track the original final offset so the missing suffix keeps its
+  // formatting and the text already delivered is never replaced.
+  const prefix = streamedText.trim();
+  let streamOffset = 0;
+  let finalOffset = finalText.length - finalText.trimStart().length;
+  while (streamOffset < prefix.length) {
+    if (/\s/.test(prefix[streamOffset])) {
+      if (!/\s/.test(finalText[finalOffset] || "")) return "";
+      while (streamOffset < prefix.length && /\s/.test(prefix[streamOffset]))
+        streamOffset += 1;
+      while (
+        finalOffset < finalText.length &&
+        /\s/.test(finalText[finalOffset])
+      )
+        finalOffset += 1;
+    } else if (prefix[streamOffset++] !== finalText[finalOffset++]) {
+      return "";
+    }
+  }
+  // An existing trailing separator cannot become a mid-word completion.
+  const hasTrailingWhitespace = /\s$/.test(streamedText);
+  if (
+    hasTrailingWhitespace &&
+    finalOffset < finalText.length &&
+    !/\s/.test(finalText[finalOffset])
+  )
+    return "";
+  const suffix = finalText.slice(finalOffset);
+  if (!suffix.trim()) return "";
+  return hasTrailingWhitespace ? suffix.trimStart() : suffix;
 }
 
 export function gatewayUsage(event: GatewayEvent): {

@@ -54,6 +54,42 @@ Lossy-copy admission and run matching count Unicode code points consistently. Su
 
 [[src/renderer/src/screens/Chat/lossyText.test.ts]] rejects an 11-character partial and a 12-character partial covering less than 30%, while retaining acceptance at the exact 12-character/30% boundary. This protects distinct streamed completion and reasoning text from false deduplication.
 
+## Legacy completion tail recovery
+
+Legacy gateway completion appends only a confirmed missing suffix, accepting whitespace drift without replacing text already emitted to the renderer.
+
+[[src/main/tui-gateway-stream.ts#gatewayCompletionSuffix]] compares the complete streamed prefix to the final text, allowing whitespace runs to differ while retaining original final offsets. Existing stream separators are reused. Unrelated, non-prefix or already complete responses append nothing, preventing duplicated replies.
+
+### Whitespace drift retains the tail
+
+Actual exported-helper fixtures recover missing tails across trailing spaces, newlines, tabs, interior whitespace changes and Unicode text while preserving the text already streamed.
+
+### Unrelated and completed text remain unchanged
+
+Completed whitespace variants, unrelated final responses and mid-word conflicts after a streamed separator do not append text or repeat the answer.
+
+## Canonical database tail recovery
+
+A matched assistant database row may replace an incomplete live row with its confirmed longer continuation while retaining the live identity and metadata.
+
+[[src/renderer/src/screens/Chat/sessionHistory.ts#reconcileStreamedWithDb]] keeps its existing row-matching rules. For a matched assistant bubble, normalized readable database content must strictly extend the complete live prefix before it replaces content. Database attachment wrappers alone, divergent replies, shorter snapshots and user submissions retain their live text. This recovery reads canonical database content rather than treating an unrelated final stream payload as authoritative.
+
+### Incomplete matched assistant row
+
+Actual reconciliation tests restore a substantive missing final sentence despite whitespace drift, preserving the live row ID and adopting its recorded database timestamp.
+
+### Structural wrappers alone do not replace text
+
+File wrappers and image markers can increase raw database length without adding readable reply content; these additions do not overwrite the live response.
+
+### Divergent and shorter canonical rows do not overwrite
+
+A shared match-key prefix alone does not authorize a content replacement. Divergent endings and older, shorter database snapshots leave streamed text intact.
+
+### User submissions retain their original content
+
+A longer database record cannot rewrite an optimistic user submission, preserving its original visible request and attachment presentation.
+
 ## Busy refusal preserves conversation
 
 A Dashboard busy refusal ends only the attempted desktop turn. Its saved conversation and runtime remain available for retry after the upstream work finishes.

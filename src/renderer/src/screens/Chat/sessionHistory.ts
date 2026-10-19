@@ -274,8 +274,8 @@ function consumeCanonicalToolMatch(
 }
 
 /**
- * Merge DB-only metadata (e.g. attachments) into a streamed message
- * while preserving the streamed message's React identity (id).
+ * Merge DB metadata and a confirmed missing assistant tail into a streamed
+ * message while preserving the streamed message's React identity (id).
  * This prevents React from remounting the DOM node, which would
  * disrupt scroll position and cause visual reordering.
  */
@@ -291,17 +291,33 @@ function mergeDbMetadataIntoStreamed(
   // never had — adopt it so the hover time matches history after refresh.
   const timestamp =
     s.timestamp ?? (typeof d.timestamp === "number" ? d.timestamp : undefined);
+  // @lat: [[chat-commands#Canonical database tail recovery]]
+  // The existing reconciliation match identifies the logical row. Only a
+  // strictly longer readable assistant prefix can recover missing text;
+  // wrappers, divergent text, and optimistic user submissions stay untouched.
+  const streamedText = normalizeBubbleContentForMatch(s.content);
+  const canonicalText = normalizeBubbleContentForMatch(d.content);
+  const needsContent =
+    s.role === "agent" &&
+    d.role === "agent" &&
+    !s.error &&
+    !s.localOnly &&
+    !!streamedText &&
+    canonicalText.length > streamedText.length &&
+    canonicalText.startsWith(streamedText);
   // Attachments from the DB that the stream didn't deliver.
   const needsAttachments =
     !!d.attachments &&
     d.attachments.length > 0 &&
     (!s.attachments || s.attachments.length === 0);
   if (
+    needsContent ||
     needsAttachments ||
     (timestamp !== undefined && timestamp !== s.timestamp)
   ) {
     return {
       ...s,
+      ...(needsContent ? { content: d.content } : {}),
       ...(needsAttachments ? { attachments: d.attachments } : {}),
       ...(timestamp !== undefined ? { timestamp } : {}),
     };
